@@ -1,0 +1,81 @@
+# =========================================================
+# Fastlink SpeedTest — .gitignore
+# =========================================================
+
+# ----- Gradle -----
+.gradle/
+build/
+**/build/
+!**/src/**/build/
+!**/src/test/**/build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+.gradletasknamecache
+
+# ----- Android -----
+local.properties
+*.apk
+*.aar
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+captures/
+.externalNativeBuild/
+.cxx/
+proguard/
+
+# ----- Android Studio / IntelliJ IDEA -----
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+.kotlin/
+
+# ----- Keystores & signing -----
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+*.gpg
+*.asc
+secring.*
+
+# ----- Local credentials & secrets -----
+# Credentials should live in ~/.gradle/gradle.properties, never in the repo.
+**/credentials.properties
+**/secrets.properties
+.env
+.env.*
+
+# ----- Editors -----
+*.swp
+*.swo
+*~
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# ----- Logs / temp -----
+*.log
+*.tmp
+*.bak
+hs_err_pid*
+
+# ----- Test / coverage -----
+**/test-results/
+**/jacoco/
+**/coverage/
+
+# ----- Claude / local tooling -----
+.claude/
+memory/
+
+# ----- Internal-only docs (do not publish to GitHub) -----
+PUBLISHING.md
