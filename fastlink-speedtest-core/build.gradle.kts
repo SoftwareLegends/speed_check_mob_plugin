@@ -25,7 +25,9 @@ android {
     publishing {
         singleVariant("release") {
             withSourcesJar()
-            withJavadocJar()
+            // Javadoc jar omitted intentionally — JitPack does not require it,
+            // and Dokka can fail on some Kotlin/Compose constructs.
+            // Re-add `withJavadocJar()` only when publishing to Maven Central.
         }
     }
 }
