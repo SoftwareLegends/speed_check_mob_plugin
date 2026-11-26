@@ -1,0 +1,22 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'expo.modules.fastlinkspeedtest'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.fastlinkspeedtest"
+  defaultConfig { versionCode 1; versionName "1.0.0" }
+}
+
+dependencies {
+  // Local development: include the root project in the app's settings.gradle and use
+  //   implementation project(':fastlink-speedtest-core')
+  // Consumers: JitPack coordinate (see README).
+  if (findProject(':fastlink-speedtest-core') != null) {
+    implementation project(':fastlink-speedtest-core')
+  } else {
+    implementation "com.github.SoftwareLegends.speed_check_mob_plugin:fastlink-speedtest-core:${findProperty('FASTLINK_VERSION') ?: '1.0.2'}"
+  }
+}
