@@ -2,6 +2,8 @@ package com.speedtest.sdk
 
 import com.speedtest.sdk.net.*
 import okhttp3.mockwebserver.MockResponse
+import com.speedtest.sdk.util.PrintlnLogSink
+import com.speedtest.sdk.util.SdkLogger
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.*
@@ -14,7 +16,10 @@ class SpeedTestApiClientTest {
 
     @Before
     fun setup() {
+        SdkLogger.sink = PrintlnLogSink
         server = MockWebServer()
+        // Client uses cleartext HTTP/2 (prior knowledge) for http:// URLs, so the mock must speak h2c.
+        server.protocols = listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE)
         server.start()
     }
 

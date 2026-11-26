@@ -83,8 +83,8 @@ fun SpeedTestScreen(
                         fadeOut(animationSpec = tween(200)))
                 },
                 label = "stateSwitch",
-            ) { _ ->
-                Column(
+            ) { targetClass ->
+                key(targetClass) { Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -92,7 +92,7 @@ fun SpeedTestScreen(
                         state = state,
                         onStart = { viewModel.startTest() },
                     )
-                }
+                } }
             }
 
             Spacer(Modifier.weight(1f))
