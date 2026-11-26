@@ -2,28 +2,25 @@ package expo.modules.fastlinkspeedtest
 
 import com.speedtest.sdk.SpeedTestClient
 import com.speedtest.sdk.SpeedTestConfig
-import com.speedtest.sdk.SpeedTestState
 import com.speedtest.sdk.bridge.SpeedTestEventMapper
+import com.speedtest.sdk.bridge.SpeedTestSession
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 class FastlinkSpeedTestModule : Module() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-  private var client: SpeedTestClient? = null
-  private var job: Job? = null
-  @Volatile private var cancelled = false
+  private val session = SpeedTestSession(scope) { sendEvent("onStateChange", it) }
 
   override fun definition() = ModuleDefinition {
     Name("FastlinkSpeedTest")
     Events("onStateChange")
 
     AsyncFunction("startTest") { config: Map<String, Any?>, promise: Promise ->
-      if (job?.isActive == true) {
-        promise.reject("BUSY", "A speed test is already running", null); return@AsyncFunction
-      }
       val baseUrl = config["baseUrl"] as? String
       if (baseUrl.isNullOrBlank()) {
         promise.reject("INVALID_CONFIG", "baseUrl is required", null); return@AsyncFunction
@@ -41,47 +38,24 @@ class FastlinkSpeedTestModule : Module() {
       )
       val interval = long("reportIntervalMs", 0)
       val c = SpeedTestClient(cfg)
-      client = c
-      cancelled = false
-      job = scope.launch {
-        val collector = launch {
-          var last = 0L
-          c.state.collect { s ->
-            val terminal = s is SpeedTestState.Finished || s is SpeedTestState.Error
-            val now = System.currentTimeMillis()
-            if (terminal || interval <= 0 || now - last >= interval) {
-              last = now
-              sendEvent("onStateChange", SpeedTestEventMapper.toEvent(s))
-            }
-          }
-        }
-        try {
-          val r = withTimeout(cfg.overallTimeoutMs) { c.runFullTest() }
-          promise.resolve(SpeedTestEventMapper.toResult(r))
-        } catch (e: TimeoutCancellationException) {
-          sendEvent("onStateChange", SpeedTestEventMapper.errorEvent("overall", e))
-          promise.reject(SpeedTestEventMapper.CODE_TIMEOUT, "Speed test timed out", e)
-        } catch (e: CancellationException) {
-          if (cancelled) {
-            sendEvent("onStateChange", SpeedTestEventMapper.cancelledEvent())
-            promise.reject(SpeedTestEventMapper.CODE_CANCELLED, "Speed test cancelled", null)
-          } else throw e
-        } catch (e: Throwable) {
-          sendEvent("onStateChange", SpeedTestEventMapper.errorEvent("test", e))
-          promise.reject(SpeedTestEventMapper.codeFor(e), SpeedTestEventMapper.sanitize(e.message ?: "error"), e)
-        } finally {
-          collector.cancel()
-          client = null
-        }
+      val runner = object : SpeedTestSession.Runner {
+        override val state get() = c.state
+        override suspend fun run() = c.runFullTest()
+        override fun cancel() = c.cancel()
       }
+      val started = session.start(
+        runner, cfg.overallTimeoutMs, interval,
+        onResult = { promise.resolve(it) },
+        onError = { code, msg -> promise.reject(code, msg, null) },
+      )
+      if (!started) promise.reject(SpeedTestEventMapper.CODE_BUSY, "A speed test is already running", null)
     }
 
-    Function("stopTest") {
-      cancelled = true
-      client?.cancel()
-      job?.cancel()
-    }
+    Function("stopTest") { session.stop() }
 
-    OnDestroy { scope.cancel() }
+    OnDestroy {
+      session.stop() // settles a pending promise with CANCELLED
+      scope.cancel()
+    }
   }
 }

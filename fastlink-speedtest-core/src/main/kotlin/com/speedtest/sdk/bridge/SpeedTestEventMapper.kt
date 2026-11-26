@@ -19,6 +19,7 @@ object SpeedTestEventMapper {
     const val CODE_TIMEOUT = "TIMEOUT"
     const val CODE_NETWORK = "NETWORK"
     const val CODE_UNKNOWN = "UNKNOWN"
+    const val CODE_BUSY = "BUSY"
 
     private val userInfoRegex = Regex("(?i)(https?://)[^/@\\s]+@")
 
