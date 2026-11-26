@@ -89,16 +89,14 @@ val upload   = client.runUploadOnly(probeMbps = 50.0)     // PhaseResult
 
 ## 3. Using `speedtest-ui` (drop-in Compose screen)
 
-`speedtest-ui` uses **Hilt**, so your app must be Hilt-enabled (`@HiltAndroidApp` Application + `@AndroidEntryPoint` Activity).
+`speedtest-ui` needs no DI framework: `SpeedTestScreen` uses a plain AndroidX `viewModel()` (Hilt is not required, and not pulled in).
 
 ```kotlin
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.speedtest.sdk.SpeedTestConfig
 import com.speedtest.sdk.ui.SpeedTestScreen
-import dagger.hilt.android.AndroidEntryPoint
 
-@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,6 +138,5 @@ The SDK expects a server exposing the standard speed-test endpoints used by `Spe
 
 ## 6. Troubleshooting
 
-- **`UnsatisfiedLinkError` for Hilt**: ensure your app applies `dagger.hilt.android.plugin` and `ksp`.
 - **Compose version mismatch**: `speedtest-ui` is built against Compose Compiler `1.5.8`. Use Kotlin `1.9.22+`.
 - **Test never starts**: confirm `INTERNET` permission and that `baseUrl` is reachable from the device.

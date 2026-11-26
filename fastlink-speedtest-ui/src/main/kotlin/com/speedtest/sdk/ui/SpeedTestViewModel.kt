@@ -4,23 +4,41 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.speedtest.sdk.SpeedTestClient
 import com.speedtest.sdk.SpeedTestConfig
+import com.speedtest.sdk.SpeedTestResult
 import com.speedtest.sdk.SpeedTestState
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+
+/** Minimal engine surface the ViewModel needs (lets tests inject a fake). */
+interface SpeedTestRunner {
+    val state: StateFlow<SpeedTestState>
+    suspend fun runFullTest(): SpeedTestResult
+    fun cancel()
+}
+
+internal class ClientRunner(private val client: SpeedTestClient) : SpeedTestRunner {
+    override val state: StateFlow<SpeedTestState> get() = client.state
+    override suspend fun runFullTest(): SpeedTestResult = client.runFullTest()
+    override fun cancel() = client.cancel()
+}
 
 /**
  * ViewModel wrapping [SpeedTestClient] for use in Compose screens.
+ *
+ * Plain AndroidX ViewModel: no DI framework required. Obtain it with
+ * `viewModel()` (default [Factory]) in any app.
  */
-@HiltViewModel
-class SpeedTestViewModel @Inject constructor() : ViewModel() {
+class SpeedTestViewModel(
+    private val runnerFactory: (SpeedTestConfig) -> SpeedTestRunner = { ClientRunner(SpeedTestClient(it)) },
+) : ViewModel() {
 
-    private val _config = MutableStateFlow<SpeedTestConfig?>(null)
-    private var client: SpeedTestClient? = null
+    private var runner: SpeedTestRunner? = null
+    private var collectorJob: Job? = null
+    private var testJob: Job? = null
 
     private val _state = MutableStateFlow<SpeedTestState>(SpeedTestState.Idle)
 
@@ -29,14 +47,18 @@ class SpeedTestViewModel @Inject constructor() : ViewModel() {
 
     /**
      * Configure the SDK with a server URL and optional credentials.
+     * Calling it again cancels the previous client and its state collector.
      */
     fun configure(config: SpeedTestConfig) {
-        _config.value = config
-        client = SpeedTestClient(config)
+        collectorJob?.cancel()
+        testJob?.cancel()
+        runner?.cancel()
 
-        // Forward client state to our state
-        viewModelScope.launch {
-            client?.state?.collect { _state.value = it }
+        val newRunner = runnerFactory(config)
+        runner = newRunner
+        _state.value = SpeedTestState.Idle
+        collectorJob = viewModelScope.launch {
+            newRunner.state.collect { _state.value = it }
         }
     }
 
@@ -44,10 +66,11 @@ class SpeedTestViewModel @Inject constructor() : ViewModel() {
      * Start a full speed test.
      */
     fun startTest() {
-        val currentClient = client ?: return
-        viewModelScope.launch {
+        val current = runner ?: return
+        testJob?.cancel()
+        testJob = viewModelScope.launch {
             try {
-                currentClient.runFullTest()
+                current.runFullTest()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -60,6 +83,14 @@ class SpeedTestViewModel @Inject constructor() : ViewModel() {
      * Cancel a running test.
      */
     fun cancel() {
-        client?.cancel()
+        runner?.cancel()
+    }
+
+    override fun onCleared() {
+        collectorJob?.cancel()
+        testJob?.cancel()
+        runner?.cancel()
+        runner = null
+        super.onCleared()
     }
 }
