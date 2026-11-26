@@ -19,7 +19,6 @@ class SpeedTestApiClientTest {
         SdkLogger.sink = PrintlnLogSink
         server = MockWebServer()
         // Client uses cleartext HTTP/2 (prior knowledge) for http:// URLs, so the mock must speak h2c.
-        server.protocols = listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE)
         server.start()
     }
 

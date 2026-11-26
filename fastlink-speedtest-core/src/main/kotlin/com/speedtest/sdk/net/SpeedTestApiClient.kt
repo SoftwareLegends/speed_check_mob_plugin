@@ -76,8 +76,14 @@ object SpeedTestApiClient {
     internal fun protocolsFor(requested: SpeedTestProtocol, isHttps: Boolean): List<Protocol> = when (requested) {
         SpeedTestProtocol.H2_PRIOR_KNOWLEDGE -> listOf(Protocol.H2_PRIOR_KNOWLEDGE)
         // HTTP_2 over cleartext is not possible without prior knowledge; fall back to HTTP/1.1.
-        SpeedTestProtocol.HTTP_2 -> if (isHttps) listOf(Protocol.HTTP_2, Protocol.HTTP_1_1) else listOf(Protocol.HTTP_1_1)
-        else -> listOf(Protocol.HTTP_1_1)
+        SpeedTestProtocol.HTTP_2 ->
+            if (isHttps) {
+                listOf(Protocol.HTTP_2, Protocol.HTTP_1_1)
+            } else {
+                SdkLogger.w(TAG, "HTTP_2 requested for a cleartext URL; falling back to HTTP/1.1 (use H2_PRIOR_KNOWLEDGE for h2c)")
+                listOf(Protocol.HTTP_1_1)
+            }
+        SpeedTestProtocol.HTTP_1_1 -> listOf(Protocol.HTTP_1_1)
     }
 
     private const val TAG = "ApiClient"
