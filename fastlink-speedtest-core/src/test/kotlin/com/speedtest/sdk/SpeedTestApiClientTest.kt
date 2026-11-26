@@ -19,7 +19,6 @@ class SpeedTestApiClientTest {
         SdkLogger.sink = PrintlnLogSink
         server = MockWebServer()
         // Client uses cleartext HTTP/2 (prior knowledge) for http:// URLs, so the mock must speak h2c.
-        server.protocols = listOf(okhttp3.Protocol.H2_PRIOR_KNOWLEDGE)
         server.start()
     }
 
@@ -136,5 +135,50 @@ class SpeedTestApiClientTest {
         } catch (e: IllegalStateException) {
             assertTrue(e.message!!.contains("206"))
         }
+    }
+
+    @Test
+    fun `default client uses HTTP 1_1 and enough parallel calls per host`() {
+        val client = SpeedTestApiClient.create(SpeedTestConfig(baseUrl = baseUrl()))
+        assertEquals(listOf(okhttp3.Protocol.HTTP_1_1), client.protocols)
+        assertTrue(client.dispatcher.maxRequestsPerHost >= 20)
+    }
+
+    @Test
+    fun `parallel downloads use distinct TCP connections`() {
+        val n = 3
+        repeat(n) {
+            server.enqueue(
+                MockResponse().setResponseCode(206)
+                    .setHeader("Content-Range", "bytes 0-1023/1048576")
+                    .setBody(okio.Buffer().write(ByteArray(1024)))
+                    .throttleBody(256, 200, java.util.concurrent.TimeUnit.MILLISECONDS)
+            )
+        }
+        val client = SpeedTestApiClient.create(SpeedTestConfig(baseUrl = baseUrl()))
+        val api = DownloadApi(client, baseUrl())
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(n)
+        try {
+            val futures = (1..n).map {
+                pool.submit<Long> {
+                    api.downloadRange("f.bin", 0, 1023).use { r ->
+                        val buf = ByteArray(512); var t = 0L
+                        while (true) { val c = r.stream.read(buf); if (c == -1) break; t += c }
+                        t
+                    }
+                }
+            }
+            futures.forEach { assertEquals(1024L, it.get(10, java.util.concurrent.TimeUnit.SECONDS)) }
+        } finally { pool.shutdown() }
+        // sequenceNumber = index of the request within its TCP connection; 0 for all n means n connections.
+        val seqs = (1..n).map { server.takeRequest().sequenceNumber }
+        assertEquals("each parallel call must use its own connection", List(n) { 0 }, seqs)
+    }
+
+    @Test
+    fun `ping works against cleartext HTTP 1_1 server`() {
+        server.enqueue(MockResponse().setBody("OK"))
+        val client = SpeedTestApiClient.create(SpeedTestConfig(baseUrl = baseUrl()))
+        assertTrue(HealthApi(client, baseUrl()).pingHealth() >= 0)
     }
 }
