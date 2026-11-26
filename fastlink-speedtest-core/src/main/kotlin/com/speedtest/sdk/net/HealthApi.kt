@@ -28,6 +28,7 @@ class HealthApi(
 
     /**
      * Send a GET /health request and return the RTT in milliseconds.
+     * @throws IllegalStateException on a non-2xx response (not a valid sample).
      */
     fun pingHealth(): Int {
         val request = Request.Builder()
@@ -38,6 +39,9 @@ class HealthApi(
         val startNanos = System.nanoTime()
         client.newCall(request).execute().use { response ->
             response.body?.string() // consume body
+            if (!response.isSuccessful) {
+                throw IllegalStateException("GET /health returned ${response.code}")
+            }
             val elapsedNanos = System.nanoTime() - startNanos
             return (elapsedNanos / 1_000_000).toInt()
         }

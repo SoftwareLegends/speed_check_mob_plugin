@@ -75,6 +75,8 @@ class SpeedSampler {
      * Check if speed has been stable for at least [holdMs] milliseconds.
      */
     fun isStable(holdMs: Long = 3000): Boolean {
+        // Nothing transferred yet (peak 0) is not "stable", it is a stall.
+        if (peakMbps <= 0.0) return false
         if (!wasStable) return false
         return (System.currentTimeMillis() - stableSinceMs) >= holdMs
     }
