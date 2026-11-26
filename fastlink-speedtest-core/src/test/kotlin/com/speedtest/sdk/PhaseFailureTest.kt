@@ -1,6 +1,8 @@
 package com.speedtest.sdk
 
 import com.speedtest.sdk.math.SpeedSampler
+import com.speedtest.sdk.util.PrintlnLogSink
+import com.speedtest.sdk.util.SdkLogger
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -17,6 +19,7 @@ class PhaseFailureTest {
 
     @Before
     fun setup() {
+        SdkLogger.sink = PrintlnLogSink
         server = MockWebServer()
     }
 
