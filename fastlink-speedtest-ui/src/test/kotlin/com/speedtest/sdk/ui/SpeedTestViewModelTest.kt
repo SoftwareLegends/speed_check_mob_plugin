@@ -3,7 +3,9 @@ package com.speedtest.sdk.ui
 import com.speedtest.sdk.SpeedTestConfig
 import com.speedtest.sdk.SpeedTestResult
 import com.speedtest.sdk.SpeedTestState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +24,13 @@ class SpeedTestViewModelTest {
     private class FakeRunner : SpeedTestRunner {
         override val state = MutableStateFlow<SpeedTestState>(SpeedTestState.Idle)
         var cancelCount = 0
-        override suspend fun runFullTest(): SpeedTestResult = throw IllegalStateException("not used")
+        var testCancelled = false
+        override suspend fun runFullTest(): SpeedTestResult = try {
+            awaitCancellation()
+        } catch (e: CancellationException) {
+            testCancelled = true
+            throw e
+        }
         override fun cancel() { cancelCount++ }
     }
 
@@ -43,7 +51,7 @@ class SpeedTestViewModelTest {
     @Test fun reconfigureIgnoresOldClientAndCancelsIt() {
         val vm = newVm()
         vm.configure(cfg)
-        vm.configure(cfg)
+        vm.configure(cfg.copy(baseUrl = "https://other.test"))
         val (a, b) = created
         assertEquals(1, a.cancelCount)
         a.state.value = SpeedTestState.Error("old", RuntimeException("x"))
@@ -52,13 +60,27 @@ class SpeedTestViewModelTest {
         assertEquals("new", (vm.state.value as SpeedTestState.Error).phase)
     }
 
+    @Test fun sameConfigKeepsRunningTest() {
+        val vm = newVm()
+        vm.configure(cfg)
+        vm.startTest()
+        created[0].state.value = SpeedTestState.Error("mid", RuntimeException("x"))
+        vm.configure(cfg)
+        assertEquals(1, created.size)
+        assertEquals(0, created[0].cancelCount)
+        assertEquals(false, created[0].testCancelled)
+        assertEquals("mid", (vm.state.value as SpeedTestState.Error).phase)
+    }
+
     @Test fun onClearedCancelsRunningTest() {
         val vm = newVm()
         vm.configure(cfg)
+        vm.startTest()
         val clearedMethod = SpeedTestViewModel::class.java.getDeclaredMethod("onCleared")
         clearedMethod.isAccessible = true
         clearedMethod.invoke(vm)
         assertEquals(1, created[0].cancelCount)
+        assertTrue(created[0].testCancelled)
         created[0].state.value = SpeedTestState.Error("late", RuntimeException("z"))
         assertEquals(SpeedTestState.Idle, vm.state.value)
     }

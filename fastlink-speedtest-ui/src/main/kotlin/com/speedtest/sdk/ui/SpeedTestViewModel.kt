@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Minimal engine surface the ViewModel needs (lets tests inject a fake). */
+/** Minimal engine surface the ViewModel needs. Intended for tests and custom engines. */
 interface SpeedTestRunner {
     val state: StateFlow<SpeedTestState>
     suspend fun runFullTest(): SpeedTestResult
@@ -30,13 +30,14 @@ internal class ClientRunner(private val client: SpeedTestClient) : SpeedTestRunn
  * ViewModel wrapping [SpeedTestClient] for use in Compose screens.
  *
  * Plain AndroidX ViewModel: no DI framework required. Obtain it with
- * `viewModel()` (default [Factory]) in any app.
+ * `viewModel()` (default AndroidX factory, no-arg constructor) in any app.
  */
 class SpeedTestViewModel(
     private val runnerFactory: (SpeedTestConfig) -> SpeedTestRunner = { ClientRunner(SpeedTestClient(it)) },
 ) : ViewModel() {
 
     private var runner: SpeedTestRunner? = null
+    private var currentConfig: SpeedTestConfig? = null
     private var collectorJob: Job? = null
     private var testJob: Job? = null
 
@@ -47,9 +48,13 @@ class SpeedTestViewModel(
 
     /**
      * Configure the SDK with a server URL and optional credentials.
-     * Calling it again cancels the previous client and its state collector.
+     * Calling it again with an equal config is a no-op (e.g. after rotation, so a
+     * running test survives); a different config cancels the previous client and
+     * its state collector.
      */
     fun configure(config: SpeedTestConfig) {
+        if (config == currentConfig && runner != null) return
+        currentConfig = config
         collectorJob?.cancel()
         testJob?.cancel()
         runner?.cancel()
@@ -91,6 +96,7 @@ class SpeedTestViewModel(
         testJob?.cancel()
         runner?.cancel()
         runner = null
+        currentConfig = null
         super.onCleared()
     }
 }
