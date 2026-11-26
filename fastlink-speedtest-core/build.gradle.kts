@@ -22,6 +22,9 @@ android {
 
     kotlinOptions { jvmTarget = "17" }
 
+    // android.util.Log (SdkLogger) must not throw in JVM unit tests.
+    testOptions { unitTests.isReturnDefaultValues = true }
+
     publishing {
         singleVariant("release") {
             withSourcesJar()

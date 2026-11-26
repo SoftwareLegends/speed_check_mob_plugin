@@ -1,8 +1,11 @@
 package com.speedtest.sdk.net
 
 import com.speedtest.sdk.SpeedTestConfig
+import com.speedtest.sdk.SpeedTestProtocol
 import com.speedtest.sdk.util.SdkLogger
+import okhttp3.ConnectionPool
 import okhttp3.Credentials
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import java.util.concurrent.TimeUnit
@@ -14,7 +17,7 @@ object SpeedTestApiClient {
 
     /**
      * Create an OkHttpClient configured for the given [SpeedTestConfig].
-     * Uses HTTP/2 for connection multiplexing and adds auth + cache control interceptors.
+     * Uses HTTP/1.1 by default so N workers = N TCP connections, and adds auth + cache control interceptors.
      */
     fun create(config: SpeedTestConfig): OkHttpClient {
         val isHttps = config.baseUrl.startsWith("https", ignoreCase = true)
@@ -29,14 +32,12 @@ object SpeedTestApiClient {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(config.requestTimeoutMs, TimeUnit.MILLISECONDS)
             .writeTimeout(config.requestTimeoutMs, TimeUnit.MILLISECONDS)
-            .apply {
-                // Use HTTP/2 — H2_PRIOR_KNOWLEDGE for cleartext, HTTP_2 for TLS
-                if (isHttps) {
-                    protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
-                } else {
-                    protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE))
-                }
-            }
+            .protocols(protocolsFor(config.protocol, isHttps))
+            .dispatcher(Dispatcher().apply {
+                maxRequests = MAX_PARALLEL_CALLS
+                maxRequestsPerHost = MAX_PARALLEL_CALLS
+            })
+            .connectionPool(ConnectionPool(MAX_PARALLEL_CALLS, 5, TimeUnit.MINUTES))
             .apply {
                 // Add auth interceptor if credentials provided.
                 // Server requires Basic Auth on EVERY request (/health, /api/files,
@@ -67,6 +68,16 @@ object SpeedTestApiClient {
                 response
             }
             .build()
+    }
+
+    /** Must be >= the largest tier maxConn (20). */
+    internal const val MAX_PARALLEL_CALLS = 32
+
+    internal fun protocolsFor(requested: SpeedTestProtocol, isHttps: Boolean): List<Protocol> = when (requested) {
+        SpeedTestProtocol.H2_PRIOR_KNOWLEDGE -> listOf(Protocol.H2_PRIOR_KNOWLEDGE)
+        // HTTP_2 over cleartext is not possible without prior knowledge; fall back to HTTP/1.1.
+        SpeedTestProtocol.HTTP_2 -> if (isHttps) listOf(Protocol.HTTP_2, Protocol.HTTP_1_1) else listOf(Protocol.HTTP_1_1)
+        else -> listOf(Protocol.HTTP_1_1)
     }
 
     private const val TAG = "ApiClient"
