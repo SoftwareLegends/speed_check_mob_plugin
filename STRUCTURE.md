@@ -81,12 +81,12 @@ Optional drop-in Compose UI. Namespace: `com.speedtest.sdk.ui`. Depends on `:fas
 
 ```
 fastlink-speedtest-ui/
-├── build.gradle.kts              # android-library + compose + hilt + ksp
+├── build.gradle.kts              # android-library + compose
 └── src/main/
     ├── AndroidManifest.xml
     └── kotlin/com/speedtest/sdk/ui/
         ├── SpeedTestScreen.kt           # PUBLIC top-level composable
-        ├── SpeedTestViewModel.kt        # @HiltViewModel
+        ├── SpeedTestViewModel.kt        # plain ViewModel (no Hilt)
         ├── theme/
         │   └── SpeedTestTheme.kt
         └── components/
@@ -96,7 +96,7 @@ fastlink-speedtest-ui/
             └── ResultSummary.kt
 ```
 
-**Dependencies:** Compose BOM, Material3, Lifecycle Compose, Hilt + Hilt Navigation Compose.
+**Dependencies:** Compose BOM, Material3, Lifecycle Compose.
 
 ### `:sample` and `:sample-core`
 

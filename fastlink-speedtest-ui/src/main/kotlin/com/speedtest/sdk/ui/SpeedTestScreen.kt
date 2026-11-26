@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.speedtest.sdk.SpeedTestConfig
 import com.speedtest.sdk.SpeedTestResult
@@ -41,13 +41,13 @@ import com.speedtest.sdk.ui.theme.SpeedTestTheme
  *
  * @param config Speed test server configuration
  * @param onFinished Optional callback when the test completes
- * @param viewModel Injected ViewModel (provided by Hilt)
+ * @param viewModel ViewModel (default: `viewModel()`, no DI framework needed)
  */
 @Composable
 fun SpeedTestScreen(
     config: SpeedTestConfig,
     onFinished: ((SpeedTestResult) -> Unit)? = null,
-    viewModel: SpeedTestViewModel = hiltViewModel(),
+    viewModel: SpeedTestViewModel = viewModel(),
 ) {
     LaunchedEffect(config) { viewModel.configure(config) }
 
