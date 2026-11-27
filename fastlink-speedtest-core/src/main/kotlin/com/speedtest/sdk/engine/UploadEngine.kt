@@ -1,5 +1,6 @@
 package com.speedtest.sdk.engine
 
+import com.speedtest.sdk.SpeedTestException
 import com.speedtest.sdk.SpeedTestState
 import com.speedtest.sdk.math.SpeedSampler
 import com.speedtest.sdk.math.SustainedScorer
@@ -90,6 +91,13 @@ class UploadEngine(
             }
         } finally {
             workers.forEach { it.cancel() }
+        }
+
+        if (sampler.totalBytes.get() == 0L) {
+            throw SpeedTestException(
+                SpeedTestException.Reason.NO_DATA_TRANSFERRED,
+                "No data transferred during upload phase: every request failed",
+            )
         }
 
         val elapsed = System.currentTimeMillis() - startTime

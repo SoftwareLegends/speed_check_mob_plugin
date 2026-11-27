@@ -1,5 +1,6 @@
 package com.speedtest.sdk.engine
 
+import com.speedtest.sdk.SpeedTestException
 import com.speedtest.sdk.net.DownloadApi
 import com.speedtest.sdk.util.SdkLogger
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +49,12 @@ class ProbeEngine(
             }
             val elapsedMs = (System.nanoTime() - startTime) / 1_000_000.0
             SdkLogger.d(TAG, "Probe $fileName: read $totalRead bytes in ${"%.1f".format(elapsedMs)} ms")
+            if (totalRead == 0L) {
+                throw SpeedTestException(
+                    SpeedTestException.Reason.NO_DATA_TRANSFERRED,
+                    "Probe of $fileName transferred no data",
+                )
+            }
             if (elapsedMs <= 0) return 0.0
             return (totalRead * 8.0) / (elapsedMs * 1000.0)
         }

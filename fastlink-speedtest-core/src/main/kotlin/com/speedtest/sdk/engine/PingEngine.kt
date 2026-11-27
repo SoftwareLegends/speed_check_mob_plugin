@@ -4,7 +4,10 @@ import com.speedtest.sdk.math.PingCalculator
 import com.speedtest.sdk.model.PingStats
 import com.speedtest.sdk.net.HealthApi
 import com.speedtest.sdk.util.SdkLogger
+import com.speedtest.sdk.SpeedTestException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
@@ -30,11 +33,12 @@ class PingEngine(
         // 1. Warmup: 5 sequential GET /health, discard results
         SdkLogger.d(TAG, "Starting warmup — 5 GET /health requests")
         repeat(5) { i ->
-            if (!isActive) return@withContext emptyPingStats()
+            ensureActive()
             try {
                 val rtt = healthApi.pingHealth()
                 SdkLogger.d(TAG, "Warmup ${i + 1}/5 — RTT=${rtt} ms")
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 SdkLogger.w(TAG, "Warmup ${i + 1}/5 failed: ${e.message}")
             }
         }
@@ -45,6 +49,7 @@ class PingEngine(
         val startTime = System.currentTimeMillis()
         var bestMedian = Double.MAX_VALUE
         var stableSince = 0L
+        var lastError: Exception? = null
 
         while (coroutineContext.isActive) {
             val elapsed = System.currentTimeMillis() - startTime
@@ -55,7 +60,9 @@ class PingEngine(
             // Take a sample
             val rtt = try {
                 healthApi.pingHealth()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                lastError = e
                 continue
             }
             samples.add(rtt)
@@ -91,7 +98,12 @@ class PingEngine(
 
         if (samples.isEmpty()) {
             SdkLogger.w(TAG, "No ping samples collected")
-            return@withContext emptyPingStats()
+            throw SpeedTestException(
+                SpeedTestException.Reason.NO_PING_SAMPLES,
+                "No ping samples collected: server unreachable or every /health request failed" +
+                    (lastError?.message?.let { " ($it)" } ?: ""),
+                lastError,
+            )
         }
 
         SdkLogger.d(TAG, "Ping done — ${samples.size} samples, min=${samples.min()} ms, max=${samples.max()} ms")
@@ -106,11 +118,6 @@ class PingEngine(
             samples = samples.toList(),
         )
     }
-
-    private fun emptyPingStats() = PingStats(
-        avg = 0.0, median = 0.0, p95 = 0.0, jitter = 0.0,
-        min = 0, max = 0, samples = emptyList(),
-    )
 
     companion object {
         private const val TAG = "PingEngine"
